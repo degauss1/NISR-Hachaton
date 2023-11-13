@@ -53,7 +53,9 @@ The dashboard is organized into sections for GDP and CPI analysis. The dataset c
 
 ### Usage
 1. Open RStudio.
+
 2.Open the consolidated_dashboard.R script.
+
 3.Run the script to generate the Shiny app and view the dashboard.
 
 ### Contributing
