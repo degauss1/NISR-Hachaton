@@ -1,0 +1,650 @@
+---
+title: "Consolidated Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    theme:
+      bg: "#101010"
+      fg: "#FDF7F7" 
+      primary: "#2980b9"
+      base_font:
+        google: Prompt
+      code_font:
+        google: JetBrains Mono
+    orientation: columns
+    vertical_layout: scroll
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(shiny)
+require(tidyverse)
+library(plotrix)
+library(rAmCharts4)
+library(readxl)
+library(hrbrthemes)
+GDP <- read_excel("D:/infographics/2023/r/dataset/R_GDP National Accounts 2022_r.xls", 
+                  sheet = "Table A", skip = 2) %>% 
+  select(-...2) %>% 
+  rename(Indicator = ...1)
+
+GDP1 <-  GDP[!is.na(GDP$Indicator),]
+GDP2 <- GDP1[1:35,]
+
+GDP2$Indicator[3] <- "Growth rate at current prices"
+
+GDP2$Indicator[5] <- "Growth rate 2017 prices"
+
+GDP2$Indicator[7] <- "Growth rate deflator"
+
+GDP2 <- GDP2[!(GDP2$Indicator %in% c("Total final consumption expenditure", "Value added by", "Gross Domestic Product (Rwf billions)", "Proportions of GDP")), ]
+
+GDP2 <- GDP2 %>%
+  mutate(
+    GDP_component = if_else(
+      Indicator %in% c("Gross Domestic Product (Rwf billions)", "GDP at current prices", "Growth rate current prices",
+                       "GDP at constant 2017 prices", "Growth rate 2017 prices", "Implicit GDP deflator", "Growth rate deflator", "Growth rate at current prices"),
+      "Gross Domestic Product (Rwf billions)",
+      if_else(Indicator == "GDP per head (in '000 Rwf)", "GDP per head (in '000 Rwf)",
+              if_else(Indicator == "GDP per head (in current US dollars)", "GDP per head (in current US dollars)",
+                      if_else(Indicator %in% c("Proportions of GDP", "Government", "Private (includes changes in stock)",
+                                               "Gross capital formation", "Resource balance"), "Proportions of GDP",
+                              if_else(Indicator %in% c("Agriculture", "Industry", "Services", "Adjustments"), "Value added by", "Other")
+                      )
+              )
+      )
+    )
+  ) %>%
+  select(GDP_component, everything())
+#names(GDP2)
+
+GDP2 <- GDP2[,!(names(GDP2) %in% c(1999,2000,2001,2002,2003,2004,2005,2006))]
+
+GDP3 <- GDP2 %>% 
+  filter(GDP_component != "Other") %>% 
+  pivot_longer(
+    cols = -c(GDP_component, Indicator),
+    names_to = "Year",
+    values_to = "Amount"
+  ) 
+
+CP <- read_excel("D:/infographics/2023/r/dataset/R_GDP National Accounts 2022_r.xls", 
+    sheet = "CYGDP CP", skip = 4) %>% 
+  select(`Activity description`,ISIC4,'2007',	'2008',	'2009', '2010',	'2011',	'2012',	'2013',	'2014',
+         '2015',	'2016',	'2017',	'2018',	'2019',	'2020',	'2021', '2022')
+
+CP <- CP[!(is.na(CP$`Activity description`) | CP$`Activity description` %in%  c("45001", "Source: National Institute of Statistics of Rwanda",
+                                                                              "TAXES LESS SUBSIDIES ON PRODUCTS")),]
+CP1 <- CP %>% 
+  filter(grepl("^A",ISIC4) & ISIC4 != 'A') %>% 
+  pivot_longer(
+    cols = -c(`Activity description`, ISIC4),
+    names_to = "Year",
+    values_to = "Values"
+  ) %>% 
+  group_by(`Activity description`, Year) %>% # Variable to be transformed
+  summarise(n = sum(Values)) %>% 
+  mutate(perc = 100*round(`n` / sum(`n`),2)) %>% 
+  arrange(perc)
+
+CP2 <- CP %>% 
+  filter(grepl("^A",ISIC4) & ISIC4 != 'A') %>% 
+  pivot_longer(
+    cols = -c(`Activity description`, ISIC4),
+    names_to = "Year",
+    values_to = "Values"
+  ) %>% 
+  group_by(`Activity description`, Year) %>% # Variable to be transformed
+  summarise(n = sum(Values)) %>% 
+  mutate(perc = 100*round(`n` / sum(`n`),2)) %>% 
+  arrange(perc) %>%
+  na.omit() 
+
+CP3 <- CP %>% 
+  filter(grepl("\\bB\\b|\\bC\\b|\\bD\\b|\\bE|\\bF\\b",ISIC4) & ISIC4 != 'B-F') %>%
+  pivot_longer(
+    cols = -c(`Activity description`, ISIC4),
+    names_to = "Year",
+    values_to = "Values"
+  ) %>% 
+  group_by(`Activity description`,Year) %>% # Variable to be transformed
+  summarise(n = sum(Values)) %>% 
+  mutate(perc = 100*round(`n` / sum(`n`),2)) %>% 
+  arrange(perc) %>%
+ # mutate(labels = scales::percent(perc)) %>% 
+  na.omit()
+
+CP4 <- CP %>% 
+  filter(grepl("G-H|I-T",ISIC4)) %>%
+  pivot_longer(
+    cols = -c(`Activity description`, ISIC4),
+    names_to = "Year",
+    values_to = "Values"
+  ) %>% 
+  group_by(`Activity description`, Year) %>% # Variable to be transformed
+  summarise(n = sum(Values)) %>% 
+  mutate(perc = 100*round(`n` / sum(`n`),2)) %>% 
+  arrange(perc) %>%
+  na.omit() 
+
+GDP2_a <- GDP2 %>% 
+  filter(Indicator %in% c("GDP at current prices", "Growth rate at current prices")) 
+
+GDP2_a_t <- data.frame(t(GDP2_a))
+GDP2_a_t$Year <- rownames(GDP2_a_t)
+GDP2_a_t <- GDP2_a_t[3:dim(GDP2_a_t)[1],]
+
+GDP2_a_t$X1 <- as.numeric(GDP2_a_t$X1)
+GDP2_a_t$X2 <- as.numeric(GDP2_a_t$X2)
+# Install thematic and un-comment for themed static plots (i.e., ggplot2)
+# thematic::thematic_rmd()
+```
+
+# **GROSS DOMESTIC PRODUCT** {data-orientation="rows"}
+
+## Column {.sidebar data-width=300}
+
+```{r}
+# Shiny UI for slider input
+sliderInput("yearRange", "Select Year Range:", min = 2007, max = 2022, value = c(2007, 2022),
+            step = 1)
+```
+
+Column {data-width=1050}
+-----------------------------------------------------------------------
+
+
+```{r}
+# Shiny server code
+output$myPlot <- renderPlot({
+  req(input$yearRange)  # Ensure that input$yearRange is available
+  
+  # Example code to filter data based on the slider input
+  filtered_data <- GDP2_a_t %>%
+    filter(Year >= input$yearRange[1] & Year <= input$yearRange[2])
+
+  # Create ggplot with filtered data
+  ggplot(filtered_data, aes(x = Year, y = X1)) +
+    geom_bar(stat = "identity", fill = "#4CAF50", color = "#006000", alpha = 0.8) +  # Green bars with darker border
+    #geom_line(aes(x = Year ,y = max(X1) * X2, group = 1), stat = "identity", color = "#E74C3C", size = 2) +  # Red line for growth rate
+    labs(
+      title = "GDP at Current Price ", 
+      x = "Year",
+      y = "",
+      subtitle = "Data Filtered Based on Selected Year Range"
+    ) +
+    #scale_y_continuous(sec.axis = sec_axis(~.*0.001, name = "Growth Rate")) +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      plot.title = element_text(size = 16, face = "bold"),
+      plot.subtitle = element_text(size = 12, color = "gray"),
+      legend.position = "top",
+      legend.title = element_text(face = "bold"),
+      panel.grid.major = element_line(color = "#E0E0E0"),
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(fill = "#F9F9F9")
+    )+
+  theme_modern_rc()
+})
+```
+
+```{r}
+# Render the plot
+plotOutput("myPlot")
+```
+
+Column {data-width=250}
+-----------------------------------------------------------------------
+
+```{r}
+GDP2_Prop <- GDP2 %>% 
+  filter(GDP_component %in% c("Proportions of GDP")) %>% 
+  pivot_longer(
+    cols = -c(GDP_component, Indicator),
+    names_to = "Year",
+    values_to = "Proportions"
+  ) 
+
+# Shiny server code
+output$myPlot1 <- renderPlot({
+  req(input$yearRange)  # Ensure that input$yearRange is available
+  
+  # Example code to filter data based on the slider input
+  filtered_data <- GDP2_Prop %>%
+    filter(Year >= input$yearRange[1] & Year <= input$yearRange[2])
+
+  # Create ggplot with filtered data
+  ggplot(filtered_data, aes(x = Year, y = Proportions, fill = Indicator)) +
+    geom_bar(stat = "identity", colour = "#006000", position=position_dodge()) +
+    labs(
+      title = "Proportions of GDP", 
+      x = "Year",
+      y = "GDP at Current Price"
+    ) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  theme_modern_rc()
+})
+```
+
+```{r}
+# Render the plot
+plotOutput("myPlot1")
+```
+
+Column {data-width=250}
+-----------------------------------------------------------------------
+
+
+
+```{r}
+GDP2_head <- GDP2 %>% 
+  filter(Indicator %in% c("GDP at current prices", "GDP per head (in '000 Rwf)")) 
+
+GDP2_head_t <- data.frame(t(GDP2_head))
+GDP2_head_t$Year <- rownames(GDP2_head_t)
+GDP2_head_t <- GDP2_head_t[3:dim(GDP2_head_t)[1],]
+
+GDP2_head_t$X1 <- as.numeric(GDP2_head_t$X1)
+GDP2_head_t$X2 <- as.numeric(GDP2_head_t$X2)
+
+# GDP
+
+# Shiny server code
+output$myPlot2 <- renderPlot({
+  req(input$yearRange)  # Ensure that input$yearRange is available
+  
+  # Example code to filter data based on the slider input
+  filtered_data <- GDP2_head_t %>%
+    filter(Year >= input$yearRange[1] & Year <= input$yearRange[2])
+
+  # Create ggplot with filtered data
+  ggplot(filtered_data, aes(x = Year, y = Proportions, fill = Indicator)) +
+    geom_area(aes(x = Year, y = X1, group = 1, fill = "orange"),stat="identity",size=1)+ 
+    geom_area(aes(x = Year, y = 10*X2, group = 1, fill = "blue"),stat="identity",size=1)+ 
+    labs(
+      title = "GDP at Current Price vs Per head", 
+      x = "Year",
+      y = "GDP at Current Price"
+    ) +
+    theme_minimal() +
+  theme_modern_rc()+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+})
+
+```
+
+```{r}
+# Render the plot
+plotOutput("myPlot2")
+```
+
+
+
+```{r}
+# Creating a reactive expression for data frame
+reactive_data_frame1 <- reactive({
+  CP1
+})
+
+# Reactive expression for filtered data based on slider input
+filtered_data1 <- reactive({
+  df1 <- reactive_data_frame1()
+  years_to_include1 <- seq(input$yearRange[1], input$yearRange[2])
+  df1[df1$Year %in% years_to_include1, ]
+})
+
+# Reactive expression for aggregated data based on col1
+aggregated_data1 <- reactive({
+  df1 <- filtered_data1()
+  agg_df1 <- aggregate(n ~ `Activity description`, data = df1, sum)
+  agg_df1$percent <- round(agg_df1$n / sum(agg_df1$n) * 100,2)
+  agg_df1
+})
+
+# Reactive expression for pie chart
+reactive_donut_chart1 <- reactive({
+  df1 <- aggregated_data1()
+  sum_of_obsrv1 <- sum(df1$n)
+  df1$`Activity description` <- paste0(df1$`Activity description`, ":", df1$percent, "%")
+
+  ggplot(df1, aes(x = "", y = percent, fill = `Activity description`)) +
+    geom_bar(width = 1, stat = "identity") +
+    coord_polar("y", start = 0) +
+    theme_void() +
+    ggtitle("GDP STRUCTURE") +
+    theme(axis.text = element_blank(),  # Optional: hide axis labels
+          plot.margin = unit(rep(0, 4), "cm")) +  # Optional: adjust plot margin
+    coord_polar(theta = "y") +  # Convert pie chart to donut chart
+    annotate("text", x = 0, y = 0, label = sum_of_obsrv1, color = "white", size = 9) +
+  theme_modern_rc() # Add a white circle in the center
+})
+
+# Output for the donut chart
+renderPlot({
+  print(reactive_donut_chart1())
+})
+
+
+
+```
+
+
+Column {data-width=450}
+-----------------------------------------------------------------------
+
+
+```{r}
+# Creating a reactive expression for data frame
+reactive_data_frame2 <- reactive({
+  CP2
+})
+
+# Reactive expression for filtered data based on slider input
+filtered_data2 <- reactive({
+  df2 <- reactive_data_frame2()
+  years_to_include2 <- seq(input$yearRange[1], input$yearRange[2])
+  df2[df2$Year %in% years_to_include2, ]
+})
+
+# Reactive expression for aggregated data based on col1
+aggregated_data2 <- reactive({
+  df2 <- filtered_data2()
+  agg_df2 <- aggregate(n ~ `Activity description`, data = df2, sum)
+  agg_df2$percent <- round(agg_df2$n / sum(agg_df2$n) * 100,2)
+  agg_df2
+})
+
+# Reactive expression for pie chart
+reactive_pie_chart2 <- reactive({
+  df2 <- aggregated_data2()
+  sum_of_obsrv2 <- sum(df2$n)
+  df2$`Activity description` <- paste0(df2$`Activity description`,":",df2$percent, "%")
+
+  ggplot(df2, aes(x = "", y = percent, fill = `Activity description`)) +
+    geom_bar(width = 1, stat = "identity") +
+    coord_polar("y", start = 0) +
+    theme_void()+ggtitle("GDP COMPONEMT: AGRICULTURE")+
+    theme(plot.title = element_text(hjust=0.5))+
+  theme_modern_rc()
+})
+
+```
+
+
+```{r}
+# Creating a reactive expression for data frame
+reactive_data_frame3 <- reactive({
+  CP3
+})
+
+# Reactive expression for filtered data based on slider input
+filtered_data3 <- reactive({
+  df3 <- reactive_data_frame3()
+  years_to_include3 <- seq(input$yearRange[1], input$yearRange[2])
+  df3[df3$Year %in% years_to_include3, ]
+})
+
+# Reactive expression for aggregated data based on col1
+aggregated_data3 <- reactive({
+  df3 <- filtered_data3()
+  agg_df3 <- aggregate(n ~ `Activity description`, data = df3, sum)
+  agg_df3$percent <- round(agg_df3$n / sum(agg_df3$n) * 100,2)
+  agg_df3
+})
+
+# Reactive expression for pie chart
+reactive_pie_chart3 <- reactive({
+  df3 <- aggregated_data3()
+  sum_of_obsrv3 <- sum(df3$n)
+  df3$`Activity description` <- paste0(df3$`Activity description`,":",df3$percent, "%")
+
+  ggplot(df3, aes(x = "", y = percent, fill = `Activity description`)) +
+    geom_bar(width = 1, stat = "identity") +
+    coord_polar("y", start = 0) +
+    theme_void()+ggtitle("GDP COMPONEMT: SERVICE")+
+    theme(plot.title = element_text(hjust=0.5))+
+  theme_modern_rc()
+})
+
+```
+
+
+```{r}
+# Creating a reactive expression for data frame
+reactive_data_frame4 <- reactive({
+  CP4
+})
+
+# Reactive expression for filtered data based on slider input
+filtered_data4 <- reactive({
+  df4 <- reactive_data_frame4()
+  years_to_include4 <- seq(input$yearRange[1], input$yearRange[2])
+  df4[df4$Year %in% years_to_include4, ]
+})
+
+# Reactive expression for aggregated data based on col1
+aggregated_data4 <- reactive({
+  df4 <- filtered_data4()
+  agg_df4 <- aggregate(n ~ `Activity description`, data = df4, sum)
+  agg_df4$percent <- round(agg_df4$n / sum(agg_df4$n) * 100,2)
+  agg_df4
+})
+
+# Reactive expression for pie chart
+reactive_pie_chart4 <- reactive({
+  df4 <- aggregated_data4()
+  sum_of_obsrv4 <- sum(df4$n)
+  df4$`Activity description` <- paste0(df4$`Activity description`,":",df4$percent, "%")
+
+  ggplot(df4, aes(x = "", y = percent, fill = `Activity description`)) +
+    geom_bar(width = 1, stat = "identity") +
+    coord_polar("y", start = 0) +
+    theme_void()+ggtitle("GDP COMPONEMT: INDUSTRY")+
+    theme(
+          plot.title = element_text(hjust=0.5))+
+  theme_modern_rc()
+})
+```
+
+
+```{r}
+# Shiny Input
+selectInput("selected_case", NULL,
+            choices = c("AGRICULTURE", "SERVICE", "INDUSTRY"),
+            selected = "AGRICULTURE")
+# Chart Output
+plotOutput("selected_chart", height = "400px", width = "600px")
+
+# Reactive expression for selected chart
+selected_chart <- reactive({
+  selected_case <- input$selected_case
+
+  switch(selected_case,
+         "AGRICULTURE" = reactive_pie_chart2(),
+         "SERVICE" = reactive_pie_chart3(),
+         "INDUSTRY" = reactive_pie_chart4())
+})
+```
+
+```{r}
+# Render selected chart
+output$selected_chart <- renderPlot({
+  print(selected_chart())
+})
+```
+
+Column {data-width=450}
+-----------------------------------------------------------------------
+
+```{r}
+GDP2_GNI <- GDP2 %>% 
+  filter(grepl("Gross Domestic Product at current prices|Factor income from abroad, net|Gross National Income|
+  Current transfers, net|Gross National Disposible Income|Less Final consumption expenditure|Gross National Saving|
+  Less Gross capital formation|Net lending to the rest of the world", Indicator)) %>% 
+  pivot_longer(
+    cols = -c(GDP_component, Indicator),
+    names_to = "Year",
+    values_to = "Values"
+  )
+
+# Shiny server code
+output$myPlot3 <- renderPlot({
+  req(input$yearRange)  # Ensure that input$yearRange is available
+  
+  # Example code to filter data based on the slider input
+  filtered_data <- GDP2_GNI %>%
+    filter(Year >= input$yearRange[1] & Year <= input$yearRange[2])
+
+  # Create ggplot with filtered data
+  ggplot(filtered_data, aes(x = Indicator, y = Values, fill = (Values < 0))) +
+    geom_bar(stat = "identity", colour = "#006000", position=position_dodge(), width = 0.5) +
+    scale_fill_manual(name = "Indicator", values = c(`TRUE` = 'blue', `FALSE` = "red")) +
+    labs(
+      title = " National income and expenditure (Rwf billions) ", 
+      x = "Year",
+      y = "GDP at Current Price"
+    ) + 
+    theme_minimal() +
+    theme_modern_rc()+
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      plot.title = element_text(hjust = 0.5),
+      legend.position = "none"
+    )
+})
+
+```
+
+```{r}
+# Render the plot
+plotOutput("myPlot3")
+```
+
+
+
+
+# **CONSUMER PRICE INDEX** {data-orientation="rows"}
+
+## Column {.sidebar data-width=200}
+
+```{r}
+CPI_Rwanda <- read_excel("D:/infographics/2023/r/dataset/CPI_time_series_December_2022.xls", 
+                  sheet = "All Rwanda", skip = 3) %>% 
+                    setNames(., c('...1','...2','...3','...4', 'Weights', format(as.Date(as.numeric(names(.)[-c(1:5)]), 
+                                                       origin = '1899-12-30'), '%m/%d/%Y'))) %>% 
+  select(-c(1:3)) %>% 
+  na.omit() %>% 
+  rename(Indicator = `...4`) %>% 
+  select(-Weights) %>% 
+  mutate(Type = "Overall")
+
+CPI_Urban <- read_excel("D:/infographics/2023/r/dataset/CPI_time_series_December_2022.xls", 
+                  sheet = "Urban", skip = 3) %>% 
+                    setNames(., c('...1','...2','...3','...4', 'Weights', format(as.Date(as.numeric(names(.)[-c(1:5)]), 
+                                                       origin = '1899-12-30'), '%m/%d/%Y'))) %>% 
+  select(-c(1:3)) %>% 
+  na.omit() %>% 
+  rename(Indicator = `...4`) %>% 
+  select(-Weights) %>% 
+  mutate(Type = "Urban")
+
+CPI_Rural <- read_excel("D:/infographics/2023/r/dataset/CPI_time_series_December_2022.xls", 
+                  sheet = "Rural", skip = 3) %>% 
+                    setNames(., c('...1','...2','...3','...4', 'Weights', format(as.Date(as.numeric(names(.)[-c(1:5)]), 
+                                                       origin = '1899-12-30'), '%m/%d/%Y'))) %>% 
+  select(-c(1:3)) %>% 
+  na.omit() %>% 
+  rename(Indicator = `...4`) %>% 
+  select(-Weights) %>% 
+  mutate(Type = "Rural")
+
+CPI_Other <- read_excel("D:/infographics/2023/r/dataset/CPI_time_series_December_2022.xls", 
+                  sheet = "Other_Indices", skip = 3) %>% 
+                    setNames(., c('...1','...2','...3','...4', 'Weights', format(as.Date(as.numeric(names(.)[-c(1:5)]), 
+                                                       origin = '1899-12-30'), '%m/%d/%Y'))) %>% 
+  select(-c(1:3)) %>% 
+  na.omit() %>% 
+  rename(Indicator = `...4`) %>% 
+  select(-Weights) 
+
+CPI_A <- bind_rows(CPI_Rwanda[CPI_Rwanda$Indicator == "GENERAL INDEX (CPI)",],
+                   CPI_Urban[CPI_Urban$Indicator == "GENERAL INDEX (CPI)",],
+                   CPI_Rural[CPI_Rural$Indicator == "GENERAL INDEX (CPI)",]) %>% 
+  gather(Date,Values,-Indicator,-Type) %>% 
+  na.omit() %>% 
+  mutate(Date = as.Date(Date, format =  "%m/%d/%Y"))
+
+CPI_Other_in <- CPI_Other %>% 
+  filter(Indicator %in% c("Local Goods Index", "Imported Goods Index", "Fresh Products(1) index", 
+                          "Energy index", "General Index excluding fresh Products and energy(2)")) %>% 
+  gather(Date,Values,-Indicator) %>% 
+  na.omit() %>% 
+  mutate(Date = as.Date(Date, format =  "%m/%d/%Y"))
+
+```
+
+
+```{r}
+# Date Range Input
+
+dateRangeInput("dateRange",
+               "Select Date Range:",
+               start = "2009-02-01",
+               end = "2022-12-31",
+               min = "2009-02-01",
+               max = "2022-12-31",
+               separator = " - ",
+               format = "yyyy-mm")
+```
+
+Column {data-width=450}
+-----------------------------------------------------------------------
+
+```{r}
+renderPlot({
+  # Filter data based on selected date range
+  selected_range <- input$dateRange
+  filtered_data <- subset(CPI_A, Date >= selected_range[1] & Date <= selected_range[2])
+
+  # Create the ggplot line plot
+  ggplot(filtered_data, aes(x = Date, y = Values, group = Type, color = Type)) +
+    geom_line() +
+    labs(title = "CPI TREND", x = "Date", y = "Values")+
+    theme_minimal()+
+    theme(
+          plot.title = element_text(hjust=0.5))+
+  theme_modern_rc()
+})
+```
+
+
+Column {data-width=450}
+-----------------------------------------------------------------------
+
+```{r}
+# Assuming CPI_A is your data frame
+renderPlot({
+  # Filter data based on selected date range
+  selected_range <- input$dateRange
+  filtered_data <- subset(CPI_Other_in, Date >= selected_range[1] & Date <= selected_range[2])
+
+  # Create the ggplot line plot
+  ggplot(filtered_data, aes(x = Date, y = Values, fill = Indicator)) +
+    geom_bar(stat = "identity", position = 'dodge') +
+    labs(title = "Consumer Price Indices for Various Categories", x = "Date", y = "Values")+
+    theme_minimal() +
+    theme(
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          plot.title = element_text(hjust=0.5)
+      ) +
+  theme_modern_rc()
+})
+
+```
+
+
+
+
+
