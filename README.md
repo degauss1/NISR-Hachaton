@@ -5,7 +5,7 @@
 This project explores and analyzes Gross Domestic Product (GDP) and Consumer Price Index (CPI) data for the year 2022. 
 The main output is a consolidated dashboard created using RStudio's Shiny and flexdashboard.
 
-####### Technologies Used
+###### Technologies Used
 
 - RStudio
 - Shiny
